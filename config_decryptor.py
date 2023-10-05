@@ -34,11 +34,11 @@ def decrypt_path(name):
     decryptName  = ""
     counter = 0
     for c in name:
-        if   c == '_':
+        if c == '_':
             decChar = ord('?')
         elif c == '-':
             decChar = ord('>')
-        elif c == '\\' or c == '/' or c == '.':
+        elif c in ['\\', '/', '.']:
             decryptName += c
             counter = 0
             continue
@@ -91,12 +91,12 @@ class Decryptor:
             sha = sha1.new()
             sha.update(d+key)
             d = sha.digest()
-            for i in xrange(self.COUNT-1):
+            for _ in xrange(self.COUNT-1):
                 sha = sha1.new()
                 sha.update(d)
                 d = sha.digest()
             hashStr += d
-        key = hashStr[0:self.KEYLEN]
+        key = hashStr[:self.KEYLEN]
         iv = hashStr[self.KEYLEN:self.KEYLEN+self.IVLEN]
         return iv, key
 
@@ -119,10 +119,8 @@ class BinXMLParser:
         self.decrypt = decrypt
 
     def __offsetDetect(self):
-        signature = self.data[0:8][::-1]
-        self.offset = 0
-        if signature == "Not DAL!":
-            self.offset = 8
+        signature = self.data[:8][::-1]
+        self.offset = 8 if signature == "Not DAL!" else 0
 
     def __read_bytes(self, size):
         result = self.data[self.offset:self.offset+size]
@@ -142,7 +140,7 @@ class BinXMLParser:
         stringsCount = self.__read_int()
         assert len(self.data) > stringsCount
         self.strings  = []
-        for i in xrange(stringsCount):
+        for _ in xrange(stringsCount):
             strlen = self.__read_int()
             str = self.__read_bytes(strlen)
             self.strings.append(str)
@@ -151,7 +149,7 @@ class BinXMLParser:
         tagName = self.strings[self.__read_int()]
         attr = self.__read_byte()
         self.xml += "  "*level
-        self.xml += "<" + tagName
+        self.xml += f"<{tagName}"
         val = ""
         if attr & 1:
                 self.__read_int()
@@ -159,28 +157,25 @@ class BinXMLParser:
                 val = self.strings[self.__read_int()]
                 val = val.lstrip().rstrip()
         if attr & 4:
-                attrs_count = self.__read_int()
-                attrs_dict = {}
-                for i in xrange(attrs_count):
-                    attrName = self.strings[self.__read_int()]
-                    attrVal = self.strings[self.__read_int()]
-                    if self.decrypt and attrName == "Path":
-                        attrVal= decrypt_path(attrVal)
-                    self.xml += " " + attrName + '="' + attrVal + '"'
+            attrs_count = self.__read_int()
+            attrs_dict = {}
+            for _ in xrange(attrs_count):
+                attrName = self.strings[self.__read_int()]
+                attrVal = self.strings[self.__read_int()]
+                if self.decrypt and attrName == "Path":
+                    attrVal= decrypt_path(attrVal)
+                self.xml += f' {attrName}="{attrVal}"'
         if attr & 8:
-                self.xml += ">\n";
-                childCount = self.__read_int()
-                for i in xrange(childCount):
-                    self.__get_item(level+1)
+            self.xml += ">\n";
+            childCount = self.__read_int()
+            for _ in xrange(childCount):
+                self.__get_item(level+1)
 
         if val != "":
             self.xml += ">\n" + "  "*(level+1) + val +"\n"
             self.xml += "  "*level + "</" + tagName + ">\n"
         else:
-            if attr & 8:
-                self.xml += "  "*level + "</" + tagName + ">\n"
-            else:
-                self.xml += "/>\n"
+            self.xml += "  "*level + "</" + tagName + ">\n" if attr & 8 else "/>\n"
 
     def __xmlBuild(self):
         self.xml = ""
@@ -200,14 +195,13 @@ class IPCDecryptor:
         self.path = path
         if (not os.path.exists(os.path.join(path, "Data", "Index.bin")) or
                 not os.path.exists(os.path.join(path, "Config", "Index.bin"))):
-            print ("Error: {} isn't OpenIPC root directory\n".format(path))
+            print(f"Error: {path} isn't OpenIPC root directory\n")
             exit(-1)
         self.dec = Decryptor(key.decode("hex"))
     
     def __decrypt_file(self, fileName):
-        f = open(fileName, "rb")
-        cipherText = f.read()
-        f.close()
+        with open(fileName, "rb") as f:
+            cipherText = f.read()
         assert len(cipherText) != 0
         plainText = self.dec.decrypt_data(cipherText)
         os.remove(fileName)
@@ -231,7 +225,7 @@ class IPCDecryptor:
         fullPath = os.path.join(path,name)
         for item in os.listdir(fullPath):
             if os.path.isdir(os.path.join(fullPath, item)):
-                if not (item in self.FORBIDIRNAME):
+                if item not in self.FORBIDIRNAME:
                     decryptName = decrypt_path(item)
                     if decryptName=="Python":
                         if not self.skipPython:
@@ -247,7 +241,7 @@ class IPCDecryptor:
             else:
                 decryptName = decrypt_path(item)
                 extension = os.path.splitext(decryptName)[1]
-                if extension == ".xml" or extension == ".xsd":
+                if extension in [".xml", ".xsd"]:
                     self.__decrypt_xml(os.path.join(fullPath, item),
                                        os.path.join(fullPath, decryptName),
                                        False)

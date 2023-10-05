@@ -103,7 +103,7 @@ def main():
     print(descr)
     file_name = ParseArguments()
     data = GenerateShellCode()
-    print("[*] Saving to %s..." % (file_name))
+    print(f"[*] Saving to {file_name}...")
     f = open(file_name, "wb")
     f.write(data)
     f.close

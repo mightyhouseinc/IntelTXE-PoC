@@ -13,7 +13,7 @@ key_start_ea = idaapi.BADADDR
 for i in range(str_count):
   assert idaapi.get_strlist_item(str_info, i)
   seg_name = idaapi.get_segm_name(idaapi.getseg(str_info.ea))
-  if not seg_name or seg_name != ".rdata" and seg_name != ".rodata":
+  if not seg_name or seg_name not in [".rdata", ".rodata"]:
     continue
   str_val = str(idaapi.get_many_bytes(str_info.ea, str_info.length))
   if str_val.startswith("Logging.xml"):
